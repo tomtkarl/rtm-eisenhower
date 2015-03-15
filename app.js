@@ -1,8 +1,7 @@
 var margin = {top: 50, right: 20, bottom: 50, left: 20};
-var mydomain = {xspan: 200, yspan: 200 };
-var width = window.innerWidth - margin.left - margin.right - 50;
-var height = window.innerHeight - margin.top - margin.bottom - 50;
-var urgencyMax = 50;
+var width = 500;//window.innerWidth - margin.left - margin.right - 50;
+var height = 500;//window.innerHeight - margin.top - margin.bottom - 50;
+var urgencyMax = 14;
 var importanceMax = 4;
 var widthScale = d3.scale.linear()
 					.domain([0, urgencyMax])
@@ -18,9 +17,6 @@ var canvas = d3.select('#eisenhower')
 				.append("g")
 				.attr("transform", "translate(" + margin.left + ","+ margin.top +")");
 function init_matrix() {
-	var xunittranslate = width/mydomain.xspan;
-	var yunittranslate = height/mydomain.yspan;
-
 	var xaxis = d3.svg.axis()
 				.ticks(0)
 				.scale(widthScale);
@@ -39,12 +35,12 @@ function init_matrix() {
 };
 init_matrix();
 
-var importanceFn = function(task) { 
+var importanceFn = function(task) {
 	priority = isNaN(task.task.priority) ? importanceMax : task.task.priority;
 	//console.log('priority:', priority);
 	return priority;
 };
-var urgencyFn = function(task) { 
+var urgencyFn = function(task) {
 	dueDate = task.task.due
 	daysLeft = 50;
 	if (dueDate) {
@@ -54,9 +50,16 @@ var urgencyFn = function(task) {
 	normDaysLeft = daysLeft < 0 ? 0 : daysLeft;
 	return normDaysLeft;
 };
-var descFn = function(task) { 
+var descFn = function(task) {
 	return task.name
 };
+
+var idFn = function(task) {
+    return task.id;
+};
+
+var numSelected = 0;
+var selectedClasses = ["red", "green", "blue", "yellow"];
 
 var refreshGraph = function(tasks) {
 	canvas.selectAll("g.gtask").remove();
@@ -69,29 +72,49 @@ var refreshGraph = function(tasks) {
 	gtasks.append("circle")
 		.attr('class', 'task')
 		.attr("r", 4)
-		.attr("cx", function(task) { 
+		.attr("cx", function(task) {
 			return widthScale(urgencyFn(task));
 		})
-		.attr("cy", function(task) { 
+		.attr("cy", function(task) {
 			return heightScale(importanceFn(task));
 		})
-		.on("mouseover", function(task) { 
-			d3.select(this).style("fill", "orange");
+        .attr("data-rtm-id", function(task) {
+			return idFn(task);
 		})
-		.on("mouseout", function(task) { 
-			d3.select(this).style("fill", "none");
+		.on("mouseover", function(task) {
+			d3.select(this).classed("task-hover", true);
 		})
-	var labels = gtasks.append("text")
-		.attr("text-anchor", "right")
-		.attr('width', "100px")
-		.attr("transform", function(task) {
-			return "translate(" 
-					+ (parseFloat(widthScale(urgencyFn(task))) + 10) 
-					+ "," + heightScale(importanceFn(task)) 
-					+ ")";
+		.on("mouseout", function(task) {
+			d3.select(this).classed("task-hover", false);
 		})
-		.text(function(task) { return descFn(task); });
+        .on("click", function(task) {
+            if (this.classList.contains("task-selected")) {
+                taskdiv = $("div#tasks .task-div[data-rtm-id="+this.attributes["data-rtm-id"].value+"]")
+				taskdiv.removeClass("task-list-selected");
+				taskdiv.removeClass(selectedClasses.join(" "));
+				taskdiv.parent().append($(".task-div").not($(".task-list-selected")));
+                this.classList.remove("task-selected");
+            } else {
+                taskdiv = $("div#tasks .task-div[data-rtm-id="+this.attributes["data-rtm-id"].value+"]");
+                taskdiv.addClass("task-list-selected");
+				taskdiv.addClass(selectedClasses[numSelected++ % selectedClasses.length]);
+                taskdiv.parent().append($(".task-div").not($(".task-list-selected")));
+                this.classList.add("task-selected");
+            }
+		})
+//	var labels = gtasks.append("text")
+//		.attr("text-anchor", "right")
+//		.attr('width', "100px")
+//		.attr("transform", function(task) {
+//			return "translate("
+//					+ (parseFloat(widthScale(urgencyFn(task))) + 10)
+//					+ "," + heightScale(importanceFn(task))
+//					+ ")";
+//		})
+//		.text(function(task) { return descFn(task); });
 }
+
+var $initial_task_divs = null;
 
 function loadAndGraphTasks() {
 	$('#tasks').html('Loading...');
@@ -109,11 +132,14 @@ function loadAndGraphTasks() {
 			}
 			$.each(listItem.taskseries, function(index, task){
 				tasks.push(task);
-				var div = $('<div>').addClass('task-div');
+				var div = $('<div>')
+                           .addClass('task-div')
+                           .attr("data-rtm-id", task.id);
 				$('<input>').attr('type', 'checkbox').appendTo(div);
 				$('<span>').html(task.name).appendTo(div);
 				div.appendTo($('#tasks'));
 			})
+            $initial_task_divs = $('.task-div');
 		});
 		refreshGraph(tasks);
 	})
